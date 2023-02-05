@@ -1,0 +1,14 @@
+github.com/gokrazy/gokrazy v0.0.0-20230215184006-9cdaabefeec8 h1:S2Ac5RfoKzqB8GAT8lHHHniwkGvnqTcCugwbb4fwPFY=
+github.com/gokrazy/gokrazy v0.0.0-20230215184006-9cdaabefeec8/go.mod h1:v4yQTOzEIpUmkKHYGMfqhktZXwvaxUpc2VfFTMyHAYI=
+github.com/gokrazy/internal v0.0.0-20220129150711-9ed298107648 h1:kBuLicM0xJw3xEe4607WlnzGL+qSwPqdyh5/LUiCdq0=
+github.com/gokrazy/internal v0.0.0-20220129150711-9ed298107648/go.mod h1:Gc9sU6yJ/qxg3gJZ1pjfcTAULa0swdTa4TH51g1e00E=
+github.com/gokrazy/updater v0.0.0-20230215172637-813ccc7f21e2 h1:kBY5R1tSf+EYZ+QaSrofLaVJtBqYsVNVBWkdMq3Smcg=
+github.com/gokrazy/updater v0.0.0-20230215172637-813ccc7f21e2/go.mod h1:PYOvzGOL4nlBmuxu7IyKQTFLaxr61+WPRNRzVtuYOHw=
+github.com/google/go-cmp v0.5.5 h1:Khx7svrCpmxxtHBq5j2mp/xVjsi8hQMfNLvJFAlrGgU=
+github.com/google/renameio/v2 v2.0.0 h1:UifI23ZTGY8Tt29JbYFiuyIU3eX+RNFtUwefq9qAhxg=
+github.com/google/renameio/v2 v2.0.0/go.mod h1:BtmJXm5YlszgC+TD4HOEEUFgkJP3nLxehU6hfe7jRt4=
+github.com/mdlayher/watchdog v0.0.0-20201005150459-8bdc4f41966b h1:7tUBfsEEBWfFeHOB7CUfoOamak+Gx/BlirfXyPk1WjI=
+github.com/mdlayher/watchdog v0.0.0-20201005150459-8bdc4f41966b/go.mod h1:bmoJUS6qOA3uKFvF3KVuhf7mU1KQirzQMeHXtPyKEqg=
+golang.org/x/sys v0.0.0-20201005065044-765f4ea38db3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 h1:OH54vjqzRWmbJ62fjuhxy7AxFFgoHN0/DPc/UrL8cAs=
+golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
