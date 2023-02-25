@@ -27,14 +27,14 @@ type rcs struct {
 }
 
 // httpFetcher handles a http update link.
-func httpFetcher(response *updateResponse, updateEndpoint, destinationDir string) (rcs, error) {
+func httpFetcher(response *updateResponse, gusServer, destinationDir string) (rcs, error) {
 	// The link may be a relative url if the server's backend registry is its local disk.
-	// Ensure we have an absolute url by adding the base (updateEndpoint) url
+	// Ensure we have an absolute url by adding the base (gusServer) url
 	// when necessary.
-	link, err := ensureAbsoluteHTTPLink(updateEndpoint, response.Link)
+	link, err := ensureAbsoluteHTTPLink(gusServer, response.Link)
 	if err != nil {
 		return rcs{}, fmt.Errorf("error ensuring absolute HTTP link %q + %q: %w",
-			updateEndpoint, response.Link, err)
+			gusServer, response.Link, err)
 	}
 
 	if err := os.MkdirAll(destinationDir, 0755); err != nil {

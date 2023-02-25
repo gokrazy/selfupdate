@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/gokrazy/updater"
 )
@@ -23,10 +24,19 @@ type updateResponse struct {
 	Link         string `json:"download_link"`
 }
 
-func checkForUpdates(ctx context.Context, updateEndpoint string, request *updateRequest) (*updateResponse, error) {
+const (
+	updateAPI        = "api/v1/update"
+)
+
+func checkForUpdates(ctx context.Context, gusServer string, request *updateRequest) (*updateResponse, error) {
 	reqBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("error json encoding request: %w", err)
+	}
+
+	updateEndpoint, err := url.JoinPath(gusServer, updateAPI)
+	if err != nil {
+		return nil, fmt.Errorf("error joining update endpoint: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", updateEndpoint, bytes.NewBuffer(reqBody))
@@ -71,7 +81,7 @@ func shouldUpdate(response *updateResponse, sbomHash string) bool {
 	return true
 }
 
-func selfupdate(ctx context.Context, updateEndpoint, destinationDir string, response *updateResponse, httpPassword, httpPort string) error {
+func selfupdate(ctx context.Context, gusServer, destinationDir string, response *updateResponse, httpPassword, httpPort string) error {
 	log.Print("starting self-update procedure")
 
 	var readClosers rcs
@@ -79,7 +89,7 @@ func selfupdate(ctx context.Context, updateEndpoint, destinationDir string, resp
 
 	switch response.RegistryType {
 	case "http", "localdisk":
-		readClosers, err = httpFetcher(response, updateEndpoint, destinationDir)
+		readClosers, err = httpFetcher(response, gusServer, destinationDir)
 		if err != nil {
 			return fmt.Errorf("error fetching %q update from link %q: %w", response.RegistryType, response.Link, err)
 		}
