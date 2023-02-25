@@ -18,6 +18,11 @@ type updateRequest struct {
 	SBOMHash  string `json:"sbom_hash"`
 }
 
+type attemptRequest struct {
+	MachineID string `json:"machine_id"`
+	SBOMHash  string `json:"sbom_hash"`
+}
+
 type updateResponse struct {
 	SBOMHash     string `json:"sbom_hash"`
 	RegistryType string `json:"registry_type"`
@@ -26,7 +31,39 @@ type updateResponse struct {
 
 const (
 	updateAPI        = "api/v1/update"
+	attemptUpdateAPI = "api/v1/attempt"
 )
+
+func registerUpdateAttempt(ctx context.Context, gusServer string, request *attemptRequest) error {
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("error json encoding request: %w", err)
+	}
+
+	attemptEndpoint, err := url.JoinPath(gusServer, attemptUpdateAPI)
+	if err != nil {
+		return fmt.Errorf("error joining attempt endpoint: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", attemptEndpoint, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return fmt.Errorf("error creating http request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status code: %v", resp.Status)
+	}
+	return nil
+}
 
 func checkForUpdates(ctx context.Context, gusServer string, request *updateRequest) (*updateResponse, error) {
 	reqBody, err := json.Marshal(request)
@@ -81,8 +118,13 @@ func shouldUpdate(response *updateResponse, sbomHash string) bool {
 	return true
 }
 
-func selfupdate(ctx context.Context, gusServer, destinationDir string, response *updateResponse, httpPassword, httpPort string) error {
+func selfupdate(ctx context.Context, gusServer, destinationDir string, request *updateRequest, response *updateResponse, httpPassword, httpPort string) error {
 	log.Print("starting self-update procedure")
+
+	attemptReq := attemptRequest{MachineID: request.MachineID, SBOMHash: response.SBOMHash}
+	if err := registerUpdateAttempt(ctx, gusServer, &attemptReq); err != nil {
+		return fmt.Errorf("error registering update attempt to %q: %w", gusServer, err)
+	}
 
 	var readClosers rcs
 	var err error
