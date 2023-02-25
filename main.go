@@ -15,7 +15,7 @@ import (
 )
 
 type opts struct {
-	updateEndpoint string
+	gusServer      string
 	checkFrequency string
 	destinationDir string
 	skipWaiting    bool
@@ -29,7 +29,7 @@ func main() {
 
 	var o opts
 
-	flag.StringVar(&o.updateEndpoint, "update_endpoint", "", "the HTTP/S endpoint of the update service (required)")
+	flag.StringVar(&o.gusServer, "gus_server", "", "the HTTP/S endpoint of the GUS (gokrazy Update System) server (required)")
 	flag.StringVar(&o.checkFrequency, "check_frequency", "1h", "the time frequency for checks to the update service. default: 1h")
 	flag.StringVar(&o.destinationDir, "destination_dir", "/tmp/selfupdate", "the destination directory for the fetched update file. default: /tmp/selfupdate")
 	flag.BoolVar(&o.skipWaiting, "skip_waiting", false, "skips the time frequency check and jitter waits, and immediately performs an update check. default: false")
@@ -42,8 +42,8 @@ func main() {
 }
 
 func logic(ctx context.Context, o opts) error {
-	if o.updateEndpoint == "" {
-		return fmt.Errorf("flag --update_endpoint must be provided")
+	if o.gusServer == "" {
+		return fmt.Errorf("flag --gus_server must be provided")
 	}
 
 	frequency, err := time.ParseDuration(o.checkFrequency)
@@ -70,7 +70,7 @@ func logic(ctx context.Context, o opts) error {
 
 	if o.skipWaiting {
 		log.Print("skipping waiting, performing an immediate updateProcess")
-		if err := updateProcess(ctx, &updateRequest{MachineID: machineID, SBOMHash: sbomHash}, o.updateEndpoint, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
+		if err := updateProcess(ctx, &updateRequest{MachineID: machineID, SBOMHash: sbomHash}, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
 			// If the updateProcess fails we exit with an error
 			// so that gokrazy supervisor will restart the process.
 			return fmt.Errorf("error performing updateProcess: %v", err)
@@ -93,7 +93,7 @@ func logic(ctx context.Context, o opts) error {
 		case <-ticker.C:
 			jitter := time.Duration(rand.Int63n(250)) * time.Second
 			time.Sleep(jitter)
-			if err := updateProcess(ctx, &updateRequest{MachineID: machineID, SBOMHash: sbomHash}, o.updateEndpoint, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
+			if err := updateProcess(ctx, &updateRequest{MachineID: machineID, SBOMHash: sbomHash}, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
 				log.Printf("error performing updateProcess: %v", err)
 				continue
 			}
@@ -101,8 +101,8 @@ func logic(ctx context.Context, o opts) error {
 	}
 }
 
-func updateProcess(ctx context.Context, upReq *updateRequest, updateEndpoint, sbomHash, destinationDir, httpPassword, httpPort string) error {
-	response, err := checkForUpdates(ctx, updateEndpoint, upReq)
+func updateProcess(ctx context.Context, upReq *updateRequest, gusServer, sbomHash, destinationDir, httpPassword, httpPort string) error {
+	response, err := checkForUpdates(ctx, gusServer, upReq)
 	if err != nil {
 		return fmt.Errorf("unable to check for updates: %w", err)
 	}
@@ -114,7 +114,7 @@ func updateProcess(ctx context.Context, upReq *updateRequest, updateEndpoint, sb
 	}
 
 	// The SBOMHash differs, start the selfupdate procedure.
-	if err := selfupdate(ctx, updateEndpoint, destinationDir, response, httpPassword, httpPort); err != nil {
+	if err := selfupdate(ctx, gusServer, destinationDir, response, httpPassword, httpPort); err != nil {
 		return fmt.Errorf("unable to perform the selfupdate procedure: %w", err)
 	}
 
