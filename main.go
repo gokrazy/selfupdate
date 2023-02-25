@@ -114,7 +114,7 @@ func updateProcess(ctx context.Context, upReq *updateRequest, gusServer, sbomHas
 	}
 
 	// The SBOMHash differs, start the selfupdate procedure.
-	if err := selfupdate(ctx, gusServer, destinationDir, response, httpPassword, httpPort); err != nil {
+	if err := selfupdate(ctx, gusServer, destinationDir, upReq, response, httpPassword, httpPort); err != nil {
 		return fmt.Errorf("unable to perform the selfupdate procedure: %w", err)
 	}
 
