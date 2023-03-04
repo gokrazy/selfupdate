@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+
+	"github.com/gokrazy/gokapi/gusapi"
 )
 
 const (
@@ -27,14 +29,14 @@ type rcs struct {
 }
 
 // httpFetcher handles a http update link.
-func httpFetcher(response *updateResponse, gusServer, destinationDir string) (rcs, error) {
+func httpFetcher(response gusapi.UpdateResponse, gusServer, destinationDir string) (rcs, error) {
 	// The link may be a relative url if the server's backend registry is its local disk.
 	// Ensure we have an absolute url by adding the base (gusServer) url
 	// when necessary.
-	link, err := ensureAbsoluteHTTPLink(gusServer, response.Link)
+	link, err := ensureAbsoluteHTTPLink(gusServer, response.DownloadLink)
 	if err != nil {
 		return rcs{}, fmt.Errorf("error ensuring absolute HTTP link %q + %q: %w",
-			gusServer, response.Link, err)
+			gusServer, response.DownloadLink, err)
 	}
 
 	if err := os.MkdirAll(destinationDir, 0755); err != nil {

@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/gokrazy/gokapi/gusapi"
 	"github.com/gokrazy/gokrazy"
 )
 
@@ -20,6 +22,10 @@ type opts struct {
 	destinationDir string
 	skipWaiting    bool
 }
+
+const (
+	serverAPIPath = "/api/v1"
+)
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -68,9 +74,18 @@ func logic(ctx context.Context, o opts) error {
 		return fmt.Errorf("could read neither /perm/http-port.txt, nor /etc/http-port.txt, nor /http-port.txt: %s", err.Error())
 	}
 
+	gusBasePath, err := url.JoinPath(o.gusServer, serverAPIPath)
+	if err != nil {
+		return fmt.Errorf("error joining gus server url: %w", err)
+	}
+
+	gusCfg := gusapi.NewConfiguration()
+	gusCfg.BasePath = gusBasePath
+	gusCli := gusapi.NewAPIClient(gusCfg)
+
 	if o.skipWaiting {
 		log.Print("skipping waiting, performing an immediate updateProcess")
-		if err := updateProcess(ctx, &updateRequest{MachineID: machineID, SBOMHash: sbomHash}, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
+		if err := updateProcess(ctx, gusCli, machineID, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
 			// If the updateProcess fails we exit with an error
 			// so that gokrazy supervisor will restart the process.
 			return fmt.Errorf("error performing updateProcess: %v", err)
@@ -93,7 +108,7 @@ func logic(ctx context.Context, o opts) error {
 		case <-ticker.C:
 			jitter := time.Duration(rand.Int63n(250)) * time.Second
 			time.Sleep(jitter)
-			if err := updateProcess(ctx, &updateRequest{MachineID: machineID, SBOMHash: sbomHash}, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
+			if err := updateProcess(ctx, gusCli, machineID, sbomHash, o.gusServer, o.destinationDir, httpPassword, httpPort); err != nil {
 				log.Printf("error performing updateProcess: %v", err)
 				continue
 			}
@@ -101,8 +116,8 @@ func logic(ctx context.Context, o opts) error {
 	}
 }
 
-func updateProcess(ctx context.Context, upReq *updateRequest, gusServer, sbomHash, destinationDir, httpPassword, httpPort string) error {
-	response, err := checkForUpdates(ctx, gusServer, upReq)
+func updateProcess(ctx context.Context, gusCli *gusapi.APIClient, machineID, gusServer, sbomHash, destinationDir, httpPassword, httpPort string) error {
+	response, err := checkForUpdates(ctx, gusCli, machineID)
 	if err != nil {
 		return fmt.Errorf("unable to check for updates: %w", err)
 	}
@@ -114,7 +129,7 @@ func updateProcess(ctx context.Context, upReq *updateRequest, gusServer, sbomHas
 	}
 
 	// The SBOMHash differs, start the selfupdate procedure.
-	if err := selfupdate(ctx, gusServer, destinationDir, upReq, response, httpPassword, httpPort); err != nil {
+	if err := selfupdate(ctx, gusCli, gusServer, machineID, destinationDir, response, httpPassword, httpPort); err != nil {
 		return fmt.Errorf("unable to perform the selfupdate procedure: %w", err)
 	}
 
