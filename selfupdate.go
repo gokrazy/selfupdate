@@ -1,129 +1,50 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 
+	"github.com/antihax/optional"
+	"github.com/gokrazy/gokapi/gusapi"
 	"github.com/gokrazy/updater"
 )
 
-type updateRequest struct {
-	MachineID string `json:"machine_id"`
-	SBOMHash  string `json:"sbom_hash"`
+func checkForUpdates(ctx context.Context, gusCli *gusapi.APIClient, machineID string) (gusapi.UpdateResponse, error) {
+	response, _, err := gusCli.UpdateApi.Update(ctx, &gusapi.UpdateApiUpdateOpts{
+		Body: optional.NewInterface(&gusapi.UpdateRequest{
+			MachineId: machineID,
+		}),
+	})
+	if err != nil {
+		return gusapi.UpdateResponse{}, fmt.Errorf("error making http request: %w", err)
+	}
+
+	return response, nil
 }
 
-type attemptRequest struct {
-	MachineID string `json:"machine_id"`
-	SBOMHash  string `json:"sbom_hash"`
-}
-
-type updateResponse struct {
-	SBOMHash     string `json:"sbom_hash"`
-	RegistryType string `json:"registry_type"`
-	Link         string `json:"download_link"`
-}
-
-const (
-	updateAPI        = "api/v1/update"
-	attemptUpdateAPI = "api/v1/attempt"
-)
-
-func registerUpdateAttempt(ctx context.Context, gusServer string, request *attemptRequest) error {
-	reqBody, err := json.Marshal(request)
-	if err != nil {
-		return fmt.Errorf("error json encoding request: %w", err)
-	}
-
-	attemptEndpoint, err := url.JoinPath(gusServer, attemptUpdateAPI)
-	if err != nil {
-		return fmt.Errorf("error joining attempt endpoint: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", attemptEndpoint, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fmt.Errorf("error creating http request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error making http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected HTTP status code: %v", resp.Status)
-	}
-	return nil
-}
-
-func checkForUpdates(ctx context.Context, gusServer string, request *updateRequest) (*updateResponse, error) {
-	reqBody, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("error json encoding request: %w", err)
-	}
-
-	updateEndpoint, err := url.JoinPath(gusServer, updateAPI)
-	if err != nil {
-		return nil, fmt.Errorf("error joining update endpoint: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", updateEndpoint, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("error creating http request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error making http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected HTTP status code: %v", resp.Status)
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading http response: %w", err)
-	}
-
-	var response updateResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("error json decoding response: %w", err)
-	}
-
-	return &response, nil
-}
-
-func shouldUpdate(response *updateResponse, sbomHash string) bool {
-	if response.SBOMHash == sbomHash {
-		log.Printf("device's gokrazy version: %s is already the desired one, skipping", response.SBOMHash)
+func shouldUpdate(response gusapi.UpdateResponse, sbomHash string) bool {
+	if response.SbomHash == sbomHash {
+		log.Printf("device's gokrazy version: %s is already the desired one, skipping", response.SbomHash)
 		return false
 	}
 
-	log.Printf("device's gokrazy version: %s, desired version: %s, proceeding with the update", sbomHash, response.SBOMHash)
+	log.Printf("device's gokrazy version: %s, desired version: %s, proceeding with the update", sbomHash, response.SbomHash)
 
 	return true
 }
 
-func selfupdate(ctx context.Context, gusServer, destinationDir string, request *updateRequest, response *updateResponse, httpPassword, httpPort string) error {
+func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machineID, destinationDir string, response gusapi.UpdateResponse, httpPassword, httpPort string) error {
 	log.Print("starting self-update procedure")
 
-	attemptReq := attemptRequest{MachineID: request.MachineID, SBOMHash: response.SBOMHash}
-	if err := registerUpdateAttempt(ctx, gusServer, &attemptReq); err != nil {
-		return fmt.Errorf("error registering update attempt to %q: %w", gusServer, err)
+	if _, _, err := gusCli.UpdateApi.Attempt(ctx, &gusapi.UpdateApiAttemptOpts{
+		Body: optional.NewInterface(&gusapi.AttemptRequest{
+			MachineId: machineID,
+			SbomHash:  response.SbomHash,
+		}),
+	}); err != nil {
+		return fmt.Errorf("error registering update attempt: %w", err)
 	}
 
 	var readClosers rcs
@@ -133,7 +54,7 @@ func selfupdate(ctx context.Context, gusServer, destinationDir string, request *
 	case "http", "localdisk":
 		readClosers, err = httpFetcher(response, gusServer, destinationDir)
 		if err != nil {
-			return fmt.Errorf("error fetching %q update from link %q: %w", response.RegistryType, response.Link, err)
+			return fmt.Errorf("error fetching %q update from link %q: %w", response.RegistryType, response.DownloadLink, err)
 		}
 	default:
 		return fmt.Errorf("unrecognized registry type %q", response.RegistryType)
