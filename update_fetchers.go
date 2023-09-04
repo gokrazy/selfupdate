@@ -2,12 +2,14 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -28,8 +30,8 @@ type rcs struct {
 	root io.ReadCloser
 }
 
-// httpFetcher handles a http update link.
-func httpFetcher(response gusapi.UpdateResponse, gusServer, destinationDir string) (rcs, error) {
+// httpUpdateFetch fetches the update payload via HTTP.
+func httpUpdateFetch(response gusapi.UpdateResponse, gusServer, destinationDir string) (rcs, error) {
 	// The link may be a relative url if the server's backend registry is its local disk.
 	// Ensure we have an absolute url by adding the base (gusServer) url
 	// when necessary.
@@ -43,7 +45,7 @@ func httpFetcher(response gusapi.UpdateResponse, gusServer, destinationDir strin
 		return rcs{}, fmt.Errorf("error ensuring destination directory exists: %w", err)
 	}
 
-	log.Printf("downloading update file from registry %q with url: %s", response.RegistryType, link)
+	log.Printf("downloading update from %q registry with url: %s", response.RegistryType, link)
 
 	filePath := filepath.Join(destinationDir, "disk.gaf")
 	if err := httpDownloadFile(destinationDir, filePath, link); err != nil {
@@ -129,6 +131,7 @@ func httpDownloadFile(destinationDir, filePath string, url string) error {
 	return nil
 }
 
+// ensureAbsoluteHTTPLink ensures an HTTP link is absolute.
 func ensureAbsoluteHTTPLink(baseURL string, link string) (string, error) {
 	base, err := url.Parse(baseURL)
 	if err != nil {
@@ -143,7 +146,7 @@ func ensureAbsoluteHTTPLink(baseURL string, link string) (string, error) {
 	return u.String(), nil
 }
 
-// Function to get available disk space for path.
+// diskSpaceAvailable gets available disk space for path.
 func diskSpaceAvailable(path string) (uint64, error) {
 	fs := syscall.Statfs_t{}
 	err := syscall.Statfs(path, &fs)
@@ -151,4 +154,56 @@ func diskSpaceAvailable(path string) (uint64, error) {
 		return 0, err
 	}
 	return fs.Bfree * uint64(fs.Bsize), nil
+}
+
+// pluginFetchUpdate fetches the update payload via plugin.
+func pluginFetchUpdate(ctx context.Context, p plugin, destinationDir string, link string) (rcs, error) {
+	if err := os.MkdirAll(destinationDir, 0755); err != nil {
+		return rcs{}, fmt.Errorf("error ensuring destination directory exists: %w", err)
+	}
+
+	log.Printf("downloading update from %q registry with url: %q", p.name, link)
+
+	filePath := filepath.Join(destinationDir, "disk.gaf")
+
+	// TODO: add update size gather + check against available disk space.
+
+	args := append(p.args, []string{"--url", link, "--output", destinationDir}...)
+
+	cmd := exec.CommandContext(ctx, p.binPath, args...)
+
+	if err := cmd.Run(); err != nil {
+		return rcs{}, fmt.Errorf("error running plugin command %q: %w", p.binPath, err)
+	}
+
+	log.Print("finished downloading update file")
+	log.Print("loading disk partitions from update file")
+
+	r, err := zip.OpenReader(filePath)
+	if err != nil {
+		return rcs{}, fmt.Errorf("error opening downloaded file %q: %w", filePath, err)
+	}
+
+	var mbrReader, bootReader, rootReader io.ReadCloser
+	for _, f := range r.File {
+		switch f.Name {
+		case mbrPartitionName:
+			mbrReader, err = f.Open()
+			if err != nil {
+				return rcs{}, fmt.Errorf("error reading %s within update file: %w", mbrPartitionName, err)
+			}
+		case bootPartitionName:
+			bootReader, err = f.Open()
+			if err != nil {
+				return rcs{}, fmt.Errorf("error reading %s within update file: %w", bootPartitionName, err)
+			}
+		case rootPartitionName:
+			rootReader, err = f.Open()
+			if err != nil {
+				return rcs{}, fmt.Errorf("error reading %s within update file: %w", rootPartitionName, err)
+			}
+		}
+	}
+
+	return rcs{r, mbrReader, bootReader, rootReader}, nil
 }
