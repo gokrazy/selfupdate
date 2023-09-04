@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -35,7 +36,7 @@ func shouldUpdate(response gusapi.UpdateResponse, sbomHash string) bool {
 	return true
 }
 
-func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machineID, destinationDir string, response gusapi.UpdateResponse, httpPassword, httpPort string) error {
+func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, plugins map[string]plugin, gusServer, machineID, destinationDir string, response gusapi.UpdateResponse, httpPassword, httpPort string) error {
 	log.Print("starting self-update procedure")
 
 	if _, _, err := gusCli.UpdateApi.Attempt(ctx, &gusapi.UpdateApiAttemptOpts{
@@ -52,12 +53,19 @@ func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machin
 
 	switch response.RegistryType {
 	case "http", "localdisk":
-		readClosers, err = httpFetcher(response, gusServer, destinationDir)
+		readClosers, err = httpUpdateFetch(response, gusServer, destinationDir)
 		if err != nil {
 			return fmt.Errorf("error fetching %q update from link %q: %w", response.RegistryType, response.DownloadLink, err)
 		}
 	default:
-		return fmt.Errorf("unrecognized registry type %q", response.RegistryType)
+		if _, ok := plugins[response.RegistryType]; !ok {
+			return fmt.Errorf("error %q is not a loaded plugin", response.RegistryType)
+		}
+
+		readClosers, err = pluginFetchUpdate(ctx, plugins[response.RegistryType], destinationDir, response.DownloadLink)
+		if err != nil {
+			return fmt.Errorf("error fetching %q update from link %q: %w", response.RegistryType, response.DownloadLink, err)
+		}
 	}
 
 	uri := fmt.Sprintf("http://gokrazy:%s@localhost:%s/", httpPassword, httpPort)
@@ -99,7 +107,7 @@ func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machin
 	}
 
 	log.Print("reboot")
-	if err := target.Reboot(ctx); err != nil {
+	if err := target.Reboot(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("reboot: %v", err)
 	}
 
