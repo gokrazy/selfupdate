@@ -14,9 +14,9 @@ setup:
 
 deps:
 	echo ">>>> installing dependencies.."
-	go install github.com/gokrazy/tools/cmd/gok@main >> /tmp/logs/test-deps-setup.txt 2>&1
-	go install github.com/gokrazy/gus/cmd/...@main >> /tmp/logs/test-deps-setup.txt 2>&1
-	go install github.com/damdo/gokrazy-machine/cmd/...@main >> /tmp/logs/test-deps-setup.txt 2>&1
+	go install github.com/gokrazy/tools/cmd/gok@main >> /tmp/logs/test-deps-setup.txt
+	go install github.com/gokrazy/gus/cmd/...@main >> /tmp/logs/test-deps-setup.txt
+	go install github.com/damdo/gokrazy-machine/cmd/...@main >> /tmp/logs/test-deps-setup.txt
 
 gus:
 	echo ">>>> setting up GUS server.."
@@ -29,6 +29,8 @@ instance:
 	gok -i hello new
 	gok -i hello add github.com/gokrazy/selfupdate
 	WORKDIR=$$(pwd) && cd $$HOME/gokrazy/hello/builddir/github.com/gokrazy/selfupdate && go mod edit -replace "github.com/gokrazy/selfupdate=$$WORKDIR" && cd $$WORKDIR
+	jq '. += {"KernelPackage":"github.com/gokrazy/kernel.arm64"}' $${HOME}/gokrazy/hello/config.json > INPUT.tmp && mv INPUT.tmp $${HOME}/gokrazy/hello/config.json
+	jq '. += {"FirmwarePackage":"github.com/gokrazy/kernel.arm64"}' $${HOME}/gokrazy/hello/config.json > INPUT.tmp && mv INPUT.tmp $${HOME}/gokrazy/hello/config.json
 	jq ".PackageConfig += {\"github.com/gokrazy/selfupdate\":{\"CommandLineFlags\":[\"--gus_server=$$GUS_SERVER_HOST:$$GUS_SERVER_PORT\",\"--check_frequency=5s\",\"--skip_waiting=true\"]}}" $${HOME}/gokrazy/hello/config.json > INPUT.tmp && mv INPUT.tmp $${HOME}/gokrazy/hello/config.json
 	jq ".PackageConfig += {\"github.com/gokrazy/gokrazy/cmd/heartbeat\":{\"CommandLineFlags\":[\"--gus_server=$$GUS_SERVER_HOST:$$GUS_SERVER_PORT\",\"--frequency=2s\"]}}" $${HOME}/gokrazy/hello/config.json > INPUT.tmp && mv INPUT.tmp $${HOME}/gokrazy/hello/config.json
 	jq ".Update.HTTPPassword = \"$${GOKRAZY_PASSWORD}\"" $${HOME}/gokrazy/hello/config.json > INPUT.tmp && mv INPUT.tmp $${HOME}/gokrazy/hello/config.json
@@ -68,6 +70,7 @@ check:
 	exit 1;
 
 cleanup:
+	read -p "Press Enter to cleanup the test and exit"
 	echo ">>>> cleanup.."
 	pkill gus-server
 	pkill gom
@@ -75,6 +78,6 @@ cleanup:
 e2e: setup deps gus instance update check cleanup
 
 test:
-	docker build -t testimg -f Dockerfile.test .
-	docker run --rm -it -p $${GOKRAZY_PORT} -p $${GUS_SERVER_PORT} -v="$${PWD}/logs:/tmp/logs" testimg /bin/bash -c 'make e2e'
+	podman build -t testimg -f Dockerfile.test .
+	podman run --rm -it -p $${GOKRAZY_PORT} -p $${GUS_SERVER_PORT} -v="$${PWD}/logs:/tmp/logs" testimg /bin/bash -c 'make e2e'
 
