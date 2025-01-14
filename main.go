@@ -108,7 +108,7 @@ func logic(ctx context.Context, o opts) error {
 		case <-ticker.C:
 			jitter := time.Duration(rand.Int63n(250)) * time.Second
 			time.Sleep(jitter)
-			if err := updateProcess(ctx, gusCli, machineID, sbomHash, o.gusServer, o.destinationDir, httpPassword, httpPort); err != nil {
+			if err := updateProcess(ctx, gusCli, machineID, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
 				log.Printf("error performing updateProcess: %v", err)
 				continue
 			}
