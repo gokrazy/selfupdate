@@ -36,9 +36,9 @@ func main() {
 	var o opts
 
 	flag.StringVar(&o.gusServer, "gus_server", "", "the HTTP/S endpoint of the GUS (gokrazy Update System) server (required)")
-	flag.StringVar(&o.checkFrequency, "check_frequency", "1h", "the time frequency for checks to the update service. default: 1h")
+	flag.StringVar(&o.checkFrequency, "check_frequency", "1h", "the time frequency for checks to the update service. The very first check is done on startup. default: 1h")
 	flag.StringVar(&o.destinationDir, "destination_dir", "/tmp/selfupdate", "the destination directory for the fetched update file. default: /tmp/selfupdate")
-	flag.BoolVar(&o.skipWaiting, "skip_waiting", false, "skips the time frequency check and jitter waits, and immediately performs an update check. default: false")
+	flag.BoolVar(&o.runOnce, "run_once", false, "exits right after the initial update attempt. default: false")
 
 	flag.Parse()
 
@@ -83,14 +83,13 @@ func logic(ctx context.Context, o opts) error {
 	gusCfg.BasePath = gusBasePath
 	gusCli := gusapi.NewAPIClient(gusCfg)
 
-	if o.skipWaiting {
-		log.Print("skipping waiting, performing an immediate updateProcess")
-		if err := updateProcess(ctx, gusCli, machineID, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
-			// If the updateProcess fails we exit with an error
-			// so that gokrazy supervisor will restart the process.
-			return fmt.Errorf("error performing updateProcess: %v", err)
-		}
+	if err := updateProcess(ctx, gusCli, machineID, o.gusServer, sbomHash, o.destinationDir, httpPassword, httpPort); err != nil {
+		// If the updateProcess fails we exit with an error
+		// so that gokrazy supervisor will restart the process.
+		return fmt.Errorf("error performing updateProcess: %w", err)
+	}
 
+	if o.runOnce {
 		// If the updateProcess doesn't error
 		// we happily return to terminate the process.
 		return nil
