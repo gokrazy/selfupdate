@@ -64,7 +64,7 @@ func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machin
 
 	log.Print("checking target partuuid support")
 
-	target, err := updater.NewTarget(uri, http.DefaultClient)
+	target, err := updater.NewTarget(ctx, uri, http.DefaultClient)
 	if err != nil {
 		return fmt.Errorf("checking target partuuid support: %v", err)
 	}
@@ -72,13 +72,13 @@ func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machin
 	// Start with the root file system because writing to the non-active
 	// partition cannot break the currently running system.
 	log.Print("updating root file system")
-	if err := target.StreamTo("root", readClosers.root); err != nil {
+	if err := target.StreamTo(ctx, "root", readClosers.root); err != nil {
 		return fmt.Errorf("updating root file system: %v", err)
 	}
 	readClosers.root.Close()
 
 	log.Print("updating boot file system")
-	if err := target.StreamTo("boot", readClosers.boot); err != nil {
+	if err := target.StreamTo(ctx, "boot", readClosers.boot); err != nil {
 		return fmt.Errorf("updating boot file system: %v", err)
 	}
 	readClosers.boot.Close()
@@ -86,7 +86,7 @@ func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machin
 	// Only relevant when running on non-Raspberry Pi devices.
 	// As it does not use an MBR.
 	log.Print("updating MBR")
-	if err := target.StreamTo("mbr", readClosers.mbr); err != nil {
+	if err := target.StreamTo(ctx, "mbr", readClosers.mbr); err != nil {
 		return fmt.Errorf("updating MBR: %v", err)
 	}
 	readClosers.mbr.Close()
@@ -94,12 +94,12 @@ func selfupdate(ctx context.Context, gusCli *gusapi.APIClient, gusServer, machin
 	readClosers.zip.Close()
 
 	log.Print("switching to non-active partition")
-	if err := target.Switch(); err != nil {
+	if err := target.Switch(ctx); err != nil {
 		return fmt.Errorf("switching to non-active partition: %v", err)
 	}
 
 	log.Print("reboot")
-	if err := target.Reboot(); err != nil {
+	if err := target.Reboot(ctx); err != nil {
 		return fmt.Errorf("reboot: %v", err)
 	}
 

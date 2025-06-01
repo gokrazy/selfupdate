@@ -1,12 +1,14 @@
 module github.com/gokrazy/selfupdate
 
-go 1.20
+go 1.24
+
+toolchain go1.24.3
 
 require (
 	github.com/antihax/optional v1.0.0
 	github.com/gokrazy/gokapi v0.0.0-20230221202227-fc8991bfa4ab
 	github.com/gokrazy/gokrazy v0.0.0-20230215184006-9cdaabefeec8
-	github.com/gokrazy/updater v0.0.0-20230215172637-813ccc7f21e2
+	github.com/gokrazy/updater v0.0.0-20250601065453-91649328574c
 )
 
 require (
